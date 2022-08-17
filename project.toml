@@ -1,0 +1,11 @@
+ProjectName = "dummy_project"
+Author = "May Draskovics"
+DueDate = "2022-08-19 23:59:59"
+MainFile = "main.py"
+TestScript = "test.py"
+Executable = "python"
+ProjFiles = ["project.toml"]
+ExpectedOutPuts = ["hello", "world"]
+RequiredPasses = 3
+TimeOutAfterSeconds = 2
+CountExecutionAsPass = true
