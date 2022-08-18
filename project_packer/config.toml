@@ -1,0 +1,12 @@
+AppVersion = "v1.0"
+AppAuthor = "May Draskovics"
+AppAPI = "something.com"
+AutoUpdate = false
+
+[Projects]
+  [Projects.dummy_project]
+    Name = "dummy_project"
+    Owner = "May Draskovics"
+    TomlPath = "D:/github/ProjectPacker"
+
+[Modules]

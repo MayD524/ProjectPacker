@@ -43,6 +43,7 @@ const tmpTestFileName string = ".test_results.tmp"
 type projectConfig struct {
 	ProjectName          string
 	Author               string
+	ProjectPath          string
 	DueDate              string
 	MainFile             string
 	TestScript           string
@@ -91,7 +92,6 @@ func test_project(tomlData *projectConfig) bool {
 	fmt.Printf("Testing project %s by %s\n", tomlData.ProjectName, tomlData.Author)
 	fmt.Printf("Constraints:\n\tRequired Passes = %d\n\tMust execute within %d seconds\n\tExpected outputs in order:\n\t\t%s\n\n", tomlData.RequiredPasses, tomlData.TimeOutAfterSeconds, strings.Join(tomlData.ExpectedOutPuts, "\n\t\t"))
 	fmt.Println(strings.Repeat("=", 100) + "\n")
-
 	// first thing check time
 	if tomlData.DueDate == "not_set" || tomlData.DueDate == "no due date" {
 		// this check passes
@@ -233,7 +233,6 @@ func unpack_project(zipFile string) {
 		dstFile.Close()
 		fileInArchive.Close()
 	}
-
 }
 
 func addFileToProject(tomlData *projectConfig, tomlFile string, fileName string) {
@@ -353,10 +352,19 @@ func createProject() {
 	println("Adding main project file...")
 	createFile(&tomlData, "project.toml", tomlData.MainFile)
 
+	println("Adding test file...")
+	createFile(&tomlData, "project.toml", "test.py")
+
 	println("Done project created...")
 }
 
 func main() {
+	conf := InitConfig()
+	defer CloseConfig(conf)
+
+	//listModules(conf)
+	listProjects(conf)
+
 	// just for cleaning up outputs
 	lineBreak = "\r\n"
 	if runtime.GOOS != "windows" {
@@ -419,6 +427,11 @@ func main() {
 	var tomlData projectConfig
 
 	toml.DecodeFile(*tomlFile, &tomlData)
+
+	tomlData.ProjectPath, _ = os.Getwd()
+	defer writeToml(*tomlFile, &tomlData)
+
+	addProject(conf, &tomlData)
 
 	if *addFile != "" {
 		fmt.Printf("Adding %s to project...", *addFile)
