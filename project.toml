@@ -1,6 +1,6 @@
 ProjectName = "dummy_project"
 Author = "May Draskovics"
-ProjectPath = "D:\\github\\ProjectPacker"
+ProjectPath = "D:/github/ProjectPacker"
 DueDate = "2022-08-19 23:59:59"
 MainFile = "main.py"
 TestScript = "test.py"

@@ -244,7 +244,7 @@ func addFileToProject(tomlData *projectConfig, tomlFile string, fileName string)
 
 func indexOf(arr []string, lookFor string) int {
 	for i, elm := range arr {
-		if elm == lookFor {
+		if elm == lookFor || filepath.Base(elm) == lookFor {
 			return i
 		}
 	}
@@ -270,7 +270,7 @@ func removeFile(tomlData *projectConfig, tomlFile string, fileName string, delet
 
 func createFile(tomlData *projectConfig, tomlFile string, newFile string) {
 	if slices.Contains(tomlData.ProjFiles, newFile) {
-		fmt.Printf("The file %s already is being tracked!", newFile)
+		fmt.Printf("The file %s already is being tracked!\n", newFile)
 	} else {
 		if err := os.MkdirAll(filepath.Dir(newFile), 0770); err != nil {
 			panic(err)
@@ -362,9 +362,6 @@ func main() {
 	conf := InitConfig()
 	defer CloseConfig(conf)
 
-	//listModules(conf)
-	listProjects(conf)
-
 	// just for cleaning up outputs
 	lineBreak = "\r\n"
 	if runtime.GOOS != "windows" {
@@ -373,17 +370,23 @@ func main() {
 
 	parser := argparse.NewParser("Project Packer", "Handles the boring stuff of CS class")
 
+	// Flags
 	newProj := parser.Flag("n", "new_project", &argparse.Options{Default: false, Help: "Create a new project"})
-	addFile := parser.String("a", "add_file", &argparse.Options{Default: "", Help: "Add a file to be packaged"})
-	crtFile := parser.String("c", "create_file", &argparse.Options{Default: "", Help: "Create a file and add it to be packaged"})
-	rmFile := parser.String("r", "remove_file", &argparse.Options{Default: "", Help: "Remove a file from the project"})
 	rmDel := parser.Flag("R", "remove_and_delete", &argparse.Options{Default: false, Help: "Paired with rmFile and will delete the file"})
-	listPkg := parser.Flag("l", "list_package", &argparse.Options{Default: false, Help: "List all files currently in the package"})
+	listConf := parser.Flag("l", "list_config", &argparse.Options{Default: false, Help: "List all files currently in the package"})
 	pack := parser.Flag("p", "pack", &argparse.Options{Default: false, Help: "Used when ready to pack a project"})
 	unpack := parser.Flag("u", "unpack", &argparse.Options{Default: false, Help: "Used when needing to unpack a packed project"})
 	runTest := parser.Flag("t", "run_test", &argparse.Options{Default: true, Help: "Runs a test script"})
+
+	// string values
+	newTemplate := parser.String("e", "new_template", &argparse.Options{Default: "", Help: "create a new template (format) <name>:<language>:<template_path>"})
 	tomlFile := parser.String("f", "toml_file", &argparse.Options{Default: default_projectFileName, Help: "The toml file for the project"})
+	rmFile := parser.String("r", "remove_file", &argparse.Options{Default: "", Help: "Remove a file from the project"})
 	projZip := parser.String("z", "project_zip", &argparse.Options{Default: "project.zip", Help: "The name of the archive of the project"})
+	addFile := parser.String("a", "add_file", &argparse.Options{Default: "", Help: "Add a file to be packaged"})
+	crtFile := parser.String("c", "create_file", &argparse.Options{Default: "", Help: "Create a file and add it to be packaged (for a template file use template:template_name)"})
+
+	// int values
 	setDue := parser.Int("d", "due_date", &argparse.Options{Default: -2, Help: "Set how many days till a project is due (-1 for no due date and 0 for end of the day)"})
 
 	err := parser.Parse(os.Args)
@@ -429,30 +432,67 @@ func main() {
 	toml.DecodeFile(*tomlFile, &tomlData)
 
 	tomlData.ProjectPath, _ = os.Getwd()
+	tomlData.ProjectPath = strings.Replace(tomlData.ProjectPath, "\\", "/", -1)
 	defer writeToml(*tomlFile, &tomlData)
 
 	addProject(conf, &tomlData)
 
 	if *addFile != "" {
-		fmt.Printf("Adding %s to project...", *addFile)
+		fmt.Printf("Adding %s to project...\n", *addFile)
 		if slices.Contains(tomlData.ProjFiles, *addFile) {
-			fmt.Printf("The file %s already is being tracked!", *addFile)
+			fmt.Printf("The file %s already is being tracked!\n", *addFile)
 		} else {
 			addFileToProject(&tomlData, *tomlFile, *addFile)
 		}
 	}
 
-	if *listPkg {
+	if *newTemplate != "" {
+		//<name>:<language>:<template_path>
+		fmt.Printf("Adding %s to templates...\n", *newTemplate)
+		template := strings.Split(*newTemplate, ":")
+		addTemplate(conf, template[0], template[1], template[2])
+	}
+
+	if *listConf {
 		listPackage(&tomlData)
+		println(strings.Repeat("=", 100) + "\nModules:\n")
+		listModules(conf)
+		println(strings.Repeat("=", 100) + "\nProjects:\n")
+		listProjects(conf)
+		println(strings.Repeat("=", 100) + "\nTemplates:\n")
+		listTemplates(conf)
+		println(strings.Repeat("=", 100))
 	}
 
 	if *crtFile != "" {
-		fmt.Printf("Creating %s...", *crtFile)
-		createFile(&tomlData, *tomlFile, *crtFile)
+		fmt.Printf("Creating %s...\n", *crtFile)
+		if strings.Contains(*crtFile, "template:") {
+			tempName := strings.Split(*crtFile, ":")[1]
+			// create a template
+
+			if !templateExists(conf, tempName) {
+				panic(fmt.Sprintf("The template %s does not exist!\n", tempName))
+			}
+
+			temp := getTemplate(conf, tempName)
+			// check if the path exists
+			if _, err := os.Stat(temp.Path); err != nil {
+				panic(fmt.Sprintf("The template %s does not exist!\n", temp.Path))
+			}
+
+			// copy file
+			p, _ := os.Getwd()
+			templatedFile := filepath.Join(p, filepath.Base(temp.Path))
+			copy(temp.Path, templatedFile)
+			addFileToProject(&tomlData, *tomlFile, strings.ReplaceAll(templatedFile, "\\", "/"))
+		} else {
+			// its not a template
+			createFile(&tomlData, *tomlFile, *crtFile)
+		}
 	}
 
 	if *rmFile != "" {
-		fmt.Printf("Removing %s...", *rmFile)
+		fmt.Printf("Removing %s...\n", *rmFile)
 		removeFile(&tomlData, *tomlFile, *rmFile, *rmDel)
 	}
 
@@ -462,7 +502,7 @@ func main() {
 
 	if *runTest {
 		if finalVerdict := test_project(&tomlData); !finalVerdict {
-			fmt.Print("Project failed too many tests! Check above to see what went wrong")
+			fmt.Print("Project failed too many tests! Check above to see what went wrong\n")
 			return
 		}
 		fmt.Printf("Project passes at least %d tests!\nIf there are more tests to pass try them! Otherwise submit this!\n", tomlData.RequiredPasses)

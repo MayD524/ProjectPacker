@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,6 +19,7 @@ AppAPI = "something.com"
 AutoUpdate = false
 [Projects]
 [Modules]
+[Templates]
 `
 
 type (
@@ -27,23 +29,61 @@ type (
 		AppAuthor  string
 		AppAPI     string
 		AutoUpdate bool
-		Projects   map[string]project
-		Modules    map[string]module
+		Projects   map[string]tomlProject
+		Modules    map[string]tomlModule
+		Templates  map[string]tomlTemplate
 	}
 
-	module struct {
+	tomlModule struct {
 		Name    string // name just to have it
 		Version string
 		Path    string
 		Farg    string // formated args
 	}
 
-	project struct {
+	tomlProject struct {
 		Name     string // name just to have it
 		Owner    string
 		TomlPath string
 	}
+
+	tomlTemplate struct {
+		Name     string
+		Language string
+		Path     string
+	}
 )
+
+func getPackerPath(file string) string {
+	p, _ := os.UserConfigDir()
+	return filepath.Join(p, "project_packer/"+file)
+}
+
+func copy(src, dst string) (int64, error) {
+	srcFileStat, err := os.Stat(src)
+	if err != nil {
+		return 0, err
+	}
+
+	if !srcFileStat.Mode().IsRegular() {
+		return 0, fmt.Errorf("%s is not a regulare file", src)
+	}
+
+	source, err := os.Open(src)
+	if err != nil {
+		return 0, err
+	}
+	defer source.Close()
+
+	destination, err := os.Create(dst)
+	if err != nil {
+		return 0, err
+	}
+	defer destination.Close()
+	nBytes, err := io.Copy(destination, source)
+	return nBytes, err
+
+}
 
 func getConfigPath() string {
 	//p, _ := os.UserConfigDir()
@@ -85,10 +125,52 @@ func addProject(conf *app_config, proj *projectConfig) {
 	if _, found := conf.Projects[proj.ProjectName]; found {
 		return // already exists
 	}
-	conf.Projects[proj.ProjectName] = project{
+	conf.Projects[proj.ProjectName] = tomlProject{
 		Name:     proj.ProjectName,
 		Owner:    proj.Author,
 		TomlPath: strings.Replace(proj.ProjectPath, "\\", "/", -1),
+	}
+}
+
+func listTemplates(conf *app_config) {
+	for name, mod := range conf.Templates {
+		fmt.Printf("[%s] %s - %s\n", mod.Language, name, mod.Path)
+	}
+}
+
+func templateExists(conf *app_config, name string) bool {
+	_, found := conf.Templates[name]
+	return found
+}
+
+func getTemplate(conf *app_config, name string) *tomlTemplate {
+	if !templateExists(conf, name) {
+		return nil
+	}
+	// so i can't ref a map? interesting
+	temp := conf.Templates[name]
+	return &temp
+}
+
+func addTemplate(conf *app_config, name string, lang string, path string) {
+	if templateExists(conf, name) {
+		return // the template exists just *stop*
+	}
+
+	endPath := getPackerPath(filepath.Base(path))
+
+	// copy data
+	b, err := copy(path, endPath)
+
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("Copied %d bytes from %s to %s\n", b, path, endPath)
+
+	conf.Templates[name] = tomlTemplate{
+		Name:     name,
+		Language: lang,
+		Path:     strings.ReplaceAll(endPath, "\\", "/"),
 	}
 }
 
@@ -112,6 +194,7 @@ func InitConfig() *app_config {
 		conf = getConfig()
 	} else {
 		conf = createConfig()
+		os.MkdirAll(getPackerPath("templates/"), 0770)
 	}
 	return conf
 }
