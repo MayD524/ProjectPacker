@@ -10,7 +10,8 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-const configPath string = "project_packer/config.toml"
+const packerConfPath string = ".project_packer/"
+const configPath string = packerConfPath + "config.toml"
 
 const defaultAppConfig string = `
 AppVersion = "v1.0"
@@ -56,7 +57,7 @@ type (
 
 func getPackerPath(file string) string {
 	p, _ := os.UserConfigDir()
-	return filepath.Join(p, "project_packer/"+file)
+	return filepath.Join(p, packerConfPath+file)
 }
 
 func copy(src, dst string) (int64, error) {
@@ -86,8 +87,12 @@ func copy(src, dst string) (int64, error) {
 }
 
 func getConfigPath() string {
-	//p, _ := os.UserConfigDir()
-	p, _ := os.Getwd()
+	var p string
+	if !IS_DEBUG {
+		p, _ = os.UserConfigDir()
+	} else {
+		p, _ = os.Getwd()
+	}
 	return filepath.Join(p, configPath)
 }
 

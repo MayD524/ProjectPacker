@@ -38,7 +38,7 @@ CountExecutionAsPass = true
 
 // TODO: eventually make this a hidden file
 const default_projectFileName string = "project.toml"
-const tmpTestFileName string = ".test_results.tmp"
+const IS_DEBUG bool = false
 
 type projectConfig struct {
 	ProjectName          string
@@ -268,7 +268,27 @@ func removeFile(tomlData *projectConfig, tomlFile string, fileName string, delet
 	}
 }
 
-func createFile(tomlData *projectConfig, tomlFile string, newFile string) {
+func createFile(tomlData *projectConfig, conf *app_config, tomlFile, newFile string) {
+	if strings.Contains(newFile, "template:") {
+		tempName := strings.Split(newFile, ":")[1]
+		// create a template
+
+		if !templateExists(conf, tempName) {
+			panic(fmt.Sprintf("The template %s does not exist!\n", tempName))
+		}
+
+		temp := getTemplate(conf, tempName)
+		// check if the path exists
+		if _, err := os.Stat(temp.Path); err != nil {
+			panic(fmt.Sprintf("The template %s does not exist!\n", temp.Path))
+		}
+
+		// copy file
+		p, _ := os.Getwd()
+		templatedFile := filepath.Join(p, filepath.Base(temp.Path))
+		copy(temp.Path, templatedFile)
+		addFileToProject(tomlData, tomlFile, strings.ReplaceAll(templatedFile, "\\", "/"))
+	}
 	if slices.Contains(tomlData.ProjFiles, newFile) {
 		fmt.Printf("The file %s already is being tracked!\n", newFile)
 	} else {
@@ -280,6 +300,24 @@ func createFile(tomlData *projectConfig, tomlFile string, newFile string) {
 		defer f.Close()
 		addFileToProject(tomlData, tomlFile, newFile)
 	}
+}
+
+func fList(tomlData *projectConfig, conf *app_config) {
+	fmt.Printf("\nProject Name: %s\nProject Path: %s\nProject Due:%s\nEntry Point:%s\nTest Script:%s \n",
+		tomlData.ProjectName,
+		tomlData.ProjectPath,
+		tomlData.DueDate,
+		tomlData.MainFile,
+		tomlData.TestScript)
+	listPackage(tomlData)
+	fmt.Printf("\nConfig Path: %s\n", getConfigPath())
+	println(strings.Repeat("=", 100) + "\nModules:\n")
+	listModules(conf)
+	println(strings.Repeat("=", 100) + "\nProjects:\n")
+	listProjects(conf)
+	println(strings.Repeat("=", 100) + "\nTemplates:\n")
+	listTemplates(conf)
+	println(strings.Repeat("=", 100))
 }
 
 func fSetDue(tomlData *projectConfig, tomlFile string, setDue int) {
@@ -308,7 +346,7 @@ func listPackage(tomlData *projectConfig) {
 	}
 }
 
-func createProject() {
+func createProject(conf *app_config) {
 
 	tomlData := projectConfig{}
 	reader := bufio.NewReader(os.Stdin)
@@ -350,10 +388,10 @@ func createProject() {
 	}
 
 	println("Adding main project file...")
-	createFile(&tomlData, "project.toml", tomlData.MainFile)
+	createFile(&tomlData, conf, "project.toml", tomlData.MainFile)
 
 	println("Adding test file...")
-	createFile(&tomlData, "project.toml", "test.py")
+	createFile(&tomlData, conf, "project.toml", "test.py")
 
 	println("Done project created...")
 }
@@ -417,7 +455,7 @@ func main() {
 	}
 
 	if *newProj {
-		createProject()
+		createProject(conf)
 		return
 	}
 
@@ -454,41 +492,13 @@ func main() {
 	}
 
 	if *listConf {
-		listPackage(&tomlData)
-		println(strings.Repeat("=", 100) + "\nModules:\n")
-		listModules(conf)
-		println(strings.Repeat("=", 100) + "\nProjects:\n")
-		listProjects(conf)
-		println(strings.Repeat("=", 100) + "\nTemplates:\n")
-		listTemplates(conf)
-		println(strings.Repeat("=", 100))
+		fList(&tomlData, conf)
 	}
 
 	if *crtFile != "" {
-		fmt.Printf("Creating %s...\n", *crtFile)
-		if strings.Contains(*crtFile, "template:") {
-			tempName := strings.Split(*crtFile, ":")[1]
-			// create a template
+		// its not a template
+		createFile(&tomlData, conf, *tomlFile, *crtFile)
 
-			if !templateExists(conf, tempName) {
-				panic(fmt.Sprintf("The template %s does not exist!\n", tempName))
-			}
-
-			temp := getTemplate(conf, tempName)
-			// check if the path exists
-			if _, err := os.Stat(temp.Path); err != nil {
-				panic(fmt.Sprintf("The template %s does not exist!\n", temp.Path))
-			}
-
-			// copy file
-			p, _ := os.Getwd()
-			templatedFile := filepath.Join(p, filepath.Base(temp.Path))
-			copy(temp.Path, templatedFile)
-			addFileToProject(&tomlData, *tomlFile, strings.ReplaceAll(templatedFile, "\\", "/"))
-		} else {
-			// its not a template
-			createFile(&tomlData, *tomlFile, *crtFile)
-		}
 	}
 
 	if *rmFile != "" {
