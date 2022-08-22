@@ -18,6 +18,8 @@ AppVersion = "v1.0"
 AppAuthor = "May Draskovics"
 AppAPI = "something.com"
 AutoUpdate = false
+UserName = ""
+AuthCode = ""
 [Projects]
 [Modules]
 [Templates]
@@ -29,6 +31,8 @@ type (
 		AppVersion string
 		AppAuthor  string
 		AppAPI     string
+		UserName   string
+		AuthCode   string
 		AutoUpdate bool
 		Projects   map[string]tomlProject
 		Modules    map[string]tomlModule
